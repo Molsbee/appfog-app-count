@@ -32,9 +32,35 @@ func main() {
 		guids = append(guids, getOrganizationID(*orgPageList)...)
 	}
 
+	jobs := make(chan string, len(guids))
+	results := make(chan Thing, len(guids))
+	for id := 1; id <= 5; id++ {
+		go worker(jobs, results)
+	}
+
+	for _, orgID := range guids {
+		jobs <- orgID
+	}
+	close(jobs)
+
 	totalApplications := 0
 	totalRunningApplications := 0
-	for _, orgID := range guids {
+	for i := 1; i <= len(guids); i++ {
+		result := <-results
+		totalApplications += result.TotalCount
+		totalRunningApplications += result.RunningCount
+
+		if result.TotalCount != 0 {
+			fmt.Printf("%-20s Total Apps: %-4d Running Apps: %d\n", result.OrganizationName, result.TotalCount, result.RunningCount)
+		}
+	}
+	close(results)
+
+	fmt.Printf("ORG COUNT: %d Total Apps: %d Running Apps: %d", len(guids), totalApplications, totalRunningApplications)
+}
+
+func worker(jobs <-chan string, results chan<- Thing) {
+	for orgID := range jobs {
 		organizationDetails := getOrganizationDetails(orgID)
 		applications := getOrganizationApplications(orgID)
 
@@ -42,20 +68,17 @@ func main() {
 		for _, app := range applications {
 			if app.Entity.State != "STOPPED" {
 				appCount++
-				totalRunningApplications++
 			}
 		}
 
-		orgName := organizationDetails.Entity.Name
-
-		orgApplicationCount := len(applications)
-		totalApplications += orgApplicationCount
-		if orgApplicationCount != 0 {
-			fmt.Printf("%-20s Total Apps: %-4d Running Apps: %d\n", orgName, orgApplicationCount, appCount)
-		}
+		results <- Thing{OrganizationName: organizationDetails.Entity.Name, RunningCount: appCount, TotalCount: len(applications)}
 	}
+}
 
-	fmt.Printf("ORG COUNT: %d Total Apps: %d Running Apps: %d", len(guids), totalApplications, totalRunningApplications)
+type Thing struct {
+	OrganizationName string
+	RunningCount     int
+	TotalCount       int
 }
 
 func getOrganizationID(org model.OrganizationResponse) []string {
@@ -90,14 +113,13 @@ func getOrganizationApplications(orgID string) []model.ApplicationResource {
 	var applications = applicationResponse.Resources
 	for i := 2; i <= applicationResponse.TotalPages; i++ {
 		page := strconv.Itoa(i)
-		pageOut, err := exec.Command("cf", "curl", "/v2/apps?q=organization_guid"+orgID+"&page="+page+"&results-per-page=100").Output()
+		pageOut, err := exec.Command("cf", "curl", "/v2/apps?q=organization_guid:"+orgID+"&page="+page+"&results-per-page=100").Output()
 		if err != nil {
 			log.Fatal("error retrieving all applications entities", err)
 		}
 
 		pageResponse := &model.ApplicationsResponse{}
 		json.Unmarshal(pageOut, pageResponse)
-
 		applications = append(applications, pageResponse.Resources...)
 	}
 
