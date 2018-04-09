@@ -1,39 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/molsbee/appfog-app-count/model"
-	"log"
-	"os/exec"
-	"strconv"
+	"github.com/molsbee/appfog-app-count/service"
 )
 
 func main() {
-	out, err := exec.Command("cf", "curl", "/v2/organizations?results-per-page=100").Output()
-	if err != nil {
-		log.Fatal("error retreiving organizations", err)
-	}
-
-	organizationResponse := &model.OrganizationResponse{}
-	json.Unmarshal(out, organizationResponse)
-
-	guids := getOrganizationID(*organizationResponse)
-	for i := 2; i <= organizationResponse.TotalPages; i++ {
-		page := strconv.Itoa(i)
-		out, err := exec.Command("cf", "curl", "/v2/organizations?page="+page+"&results-per-page=100").Output()
-		if err != nil {
-			log.Fatal("error retreiving organizations", err)
-		}
-
-		orgPageList := &model.OrganizationResponse{}
-		json.Unmarshal(out, orgPageList)
-
-		guids = append(guids, getOrganizationID(*orgPageList)...)
-	}
+	organizations := service.DefaultCloudFoundryClient.GetOrganizations()
+	guids := organizations.GetGUID()
 
 	jobs := make(chan string, len(guids))
-	results := make(chan Thing, len(guids))
+	results := make(chan WorkerResponse, len(guids))
 	for id := 1; id <= 5; id++ {
 		go worker(jobs, results)
 	}
@@ -59,10 +36,10 @@ func main() {
 	fmt.Printf("ORG COUNT: %d Total Apps: %d Running Apps: %d", len(guids), totalApplications, totalRunningApplications)
 }
 
-func worker(jobs <-chan string, results chan<- Thing) {
+func worker(jobs <-chan string, results chan<- WorkerResponse) {
 	for orgID := range jobs {
-		organizationDetails := getOrganizationDetails(orgID)
-		applications := getOrganizationApplications(orgID)
+		organizationDetails := service.DefaultCloudFoundryClient.GetOrganizationDetails(orgID)
+		applications := service.DefaultCloudFoundryClient.GetOrganizationApplications(orgID)
 
 		appCount := 0
 		for _, app := range applications {
@@ -71,57 +48,12 @@ func worker(jobs <-chan string, results chan<- Thing) {
 			}
 		}
 
-		results <- Thing{OrganizationName: organizationDetails.Entity.Name, RunningCount: appCount, TotalCount: len(applications)}
+		results <- WorkerResponse{OrganizationName: organizationDetails.Entity.Name, RunningCount: appCount, TotalCount: len(applications)}
 	}
 }
 
-type Thing struct {
+type WorkerResponse struct {
 	OrganizationName string
 	RunningCount     int
 	TotalCount       int
-}
-
-func getOrganizationID(org model.OrganizationResponse) []string {
-	var guid []string
-	for _, resource := range org.Resources {
-		guid = append(guid, resource.Metadata.GUID)
-	}
-	return guid
-}
-
-func getOrganizationDetails(orgID string) model.OrganizationResource {
-	out, err := exec.Command("cf", "curl", "/v2/organizations/"+orgID).Output()
-	if err != nil {
-		log.Fatal("error retreiving organization details", err)
-	}
-
-	organizationDetails := &model.OrganizationResource{}
-	json.Unmarshal(out, organizationDetails)
-
-	return *organizationDetails
-}
-
-func getOrganizationApplications(orgID string) []model.ApplicationResource {
-	appOut, err := exec.Command("cf", "curl", "/v2/apps?q=organization_guid:"+orgID+"&results-per-page=100").Output()
-	if err != nil {
-		log.Fatal("error retrieving apps for organization", err)
-	}
-
-	applicationResponse := &model.ApplicationsResponse{}
-	json.Unmarshal(appOut, applicationResponse)
-
-	var applications = applicationResponse.Resources
-	for i := 2; i <= applicationResponse.TotalPages; i++ {
-		page := strconv.Itoa(i)
-		pageOut, err := exec.Command("cf", "curl", "/v2/apps?q=organization_guid:"+orgID+"&page="+page+"&results-per-page=100").Output()
-		if err != nil {
-			log.Fatal("error retrieving all applications entities", err)
-		}
-
-		pageResponse := &model.ApplicationsResponse{}
-		json.Unmarshal(pageOut, pageResponse)
-		applications = append(applications, pageResponse.Resources...)
-	}
-
-	return applications
 }

@@ -8,6 +8,15 @@ type OrganizationResponse struct {
 	Resources    []OrganizationResource `json:"resources"`
 }
 
+func (orgs *OrganizationResponse) GetGUID() []string {
+	var guids []string
+	for _, resource := range orgs.Resources {
+		guids = append(guids, resource.Metadata.GUID)
+	}
+
+	return guids
+}
+
 type OrganizationResource struct {
 	Metadata Metadata           `json:"metadata"`
 	Entity   OrganizationEntity `json:"entity"`
