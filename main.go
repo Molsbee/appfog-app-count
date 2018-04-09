@@ -8,17 +8,7 @@ import (
 func main() {
 	organizations := service.DefaultCloudFoundryClient.GetOrganizations()
 	guids := organizations.GetGUID()
-
-	jobs := make(chan string, len(guids))
-	results := make(chan WorkerResponse, len(guids))
-	for id := 1; id <= 5; id++ {
-		go worker(jobs, results)
-	}
-
-	for _, orgID := range guids {
-		jobs <- orgID
-	}
-	close(jobs)
+	results := setupWorkers(organizations.GetGUID())
 
 	totalApplications := 0
 	totalRunningApplications := 0
@@ -36,20 +26,33 @@ func main() {
 	fmt.Printf("ORG COUNT: %d Total Apps: %d Running Apps: %d", len(guids), totalApplications, totalRunningApplications)
 }
 
-func worker(jobs <-chan string, results chan<- WorkerResponse) {
-	for orgID := range jobs {
-		organizationDetails := service.DefaultCloudFoundryClient.GetOrganizationDetails(orgID)
-		applications := service.DefaultCloudFoundryClient.GetOrganizationApplications(orgID)
+func setupWorkers(guids []string) (chan WorkerResponse) {
+	jobs := make(chan string, len(guids))
+	results := make(chan WorkerResponse, len(guids))
+	for id := 1; id <= 5; id++ {
+		go func() {
+			for orgID := range jobs {
+				organizationDetails := service.DefaultCloudFoundryClient.GetOrganizationDetails(orgID)
+				applications := service.DefaultCloudFoundryClient.GetOrganizationApplications(orgID)
 
-		appCount := 0
-		for _, app := range applications {
-			if app.Entity.State != "STOPPED" {
-				appCount++
+				appCount := 0
+				for _, app := range applications {
+					if app.Entity.State != "STOPPED" {
+						appCount++
+					}
+				}
+
+				results <- WorkerResponse{OrganizationName: organizationDetails.Entity.Name, RunningCount: appCount, TotalCount: len(applications)}
 			}
-		}
-
-		results <- WorkerResponse{OrganizationName: organizationDetails.Entity.Name, RunningCount: appCount, TotalCount: len(applications)}
+		}()
 	}
+
+	for _, orgID := range guids {
+		jobs <- orgID
+	}
+	close(jobs)
+
+	return results
 }
 
 type WorkerResponse struct {
