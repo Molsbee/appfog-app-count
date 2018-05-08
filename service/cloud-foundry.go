@@ -6,11 +6,22 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"fmt"
 )
 
 var DefaultCloudFoundryClient = &CloudFoundryClient{}
 
 type CloudFoundryClient struct {
+}
+
+func (c *CloudFoundryClient) Login(endpoint, username, password string) error {
+	out, err := exec.Command("cf", "login", "-a", endpoint, "-u", username, "-p", password, "-o", "CLAF", "-s", "Prod").CombinedOutput()
+	if err != nil {
+		fmt.Printf("failed login command: %s/n", string(out))
+		return err
+	}
+
+	return nil
 }
 
 func (c *CloudFoundryClient) GetOrganizations() model.OrganizationResponse {
