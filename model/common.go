@@ -6,3 +6,9 @@ type Metadata struct {
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
+
+type WorkerResponse struct {
+	OrganizationName string
+	RunningCount     int
+	TotalCount       int
+}
