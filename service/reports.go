@@ -8,17 +8,28 @@ import (
 	"os"
 	"encoding/csv"
 	"strconv"
+	"github.com/molsbee/go-cfclient"
+	"net/url"
 )
 
 func GenerateReport(username, password, region, endpoint string) error {
 	fmt.Printf("collecting application data for region %s\n", region)
-	if err := DefaultCloudFoundryClient.Login(endpoint, username, password); err != nil {
-		return errors.New(fmt.Sprintf("unable to login with cloud foundry api at endpoint %s", endpoint))
+	client, err := cfclient.NewClient(&cfclient.Config{
+		ApiAddress: endpoint,
+		Username: username,
+		Password: password,
+	})
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("unable to login with cloud foundry api at endpoint %s - error %s", endpoint, err.Error()))
 	}
 
-	organizations := DefaultCloudFoundryClient.GetOrganizations()
-	guids := organizations.GetGUID()
-	results := setupWorkers(organizations.GetGUID())
+	orgs, err := client.ListOrgs()
+	if err != nil {
+		return errors.New("unable to collect a list of all orgs in region")
+	}
+
+	results := setupWorkers(client, orgs)
 
 	now := time.Now()
 	timeStamp := fmt.Sprintf("%d-%02d-%02d_%02d-%02d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute())
@@ -33,7 +44,7 @@ func GenerateReport(username, password, region, endpoint string) error {
 
 	totalApplications := 0
 	totalRunningApplications := 0
-	for i := 1; i <= len(guids); i++ {
+	for i := 1; i <= len(orgs); i++ {
 		result := <-results
 		totalApplications += result.TotalCount
 		totalRunningApplications += result.RunningCount
@@ -50,36 +61,38 @@ func GenerateReport(username, password, region, endpoint string) error {
 		return errors.New("error writing csv content into file")
 	}
 
-	fmt.Printf("ORG COUNT: %d Total Apps: %d Running Apps: %d\n", len(guids), totalApplications, totalRunningApplications)
+	fmt.Printf("ORG COUNT: %d Total Apps: %d Running Apps: %d\n", len(orgs), totalApplications, totalRunningApplications)
 
 	return nil
 }
 
-func setupWorkers(guids []string) (chan model.WorkerResponse) {
-	jobs := make(chan string, len(guids))
-	results := make(chan model.WorkerResponse, len(guids))
+func setupWorkers(client *cfclient.Client, orgs []cfclient.Org) (chan model.WorkerResponse) {
+	orgJobs := make(chan cfclient.Org, len(orgs))
+	for _, org := range orgs {
+		orgJobs <- org
+	}
+
+	results := make(chan model.WorkerResponse, len(orgs))
+
+
 	for id := 1; id <= 5; id++ {
 		go func() {
-			for orgID := range jobs {
-				organizationDetails := DefaultCloudFoundryClient.GetOrganizationDetails(orgID)
-				applications := DefaultCloudFoundryClient.GetOrganizationApplications(orgID)
+			for org := range orgJobs {
+				apps, _ := client.ListAppsByQuery(url.Values{
+					"q": {fmt.Sprintf("organization_guid:%s", org.Guid)},
+				})
 
 				appCount := 0
-				for _, app := range applications {
-					if app.Entity.State != "STOPPED" {
+				for _, app := range apps {
+					if app.State != "STOPPED" {
 						appCount++
 					}
 				}
 
-				results <- model.WorkerResponse{OrganizationName: organizationDetails.Entity.Name, RunningCount: appCount, TotalCount: len(applications)}
+				results <- model.WorkerResponse{OrganizationName: org.Name, RunningCount: appCount, TotalCount: len(apps)}
 			}
 		}()
 	}
-
-	for _, orgID := range guids {
-		jobs <- orgID
-	}
-	close(jobs)
 
 	return results
 }
