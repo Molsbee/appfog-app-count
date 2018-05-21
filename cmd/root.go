@@ -97,7 +97,7 @@ var deleteApps = &cobra.Command{
 	Use: "delete-apps",
 	Short: "Stops/Deletes all apps associated with customer organizations.",
 	Long: "Takes a list of customer organizations and iterates through them to stop them.",
-	Example: "cleanup --username bah.t3n --organizations cw07,nbri",
+	Example: "delete-apps --username bah.t3n --organizations cw07,nbri",
 	Run: func(cmd *cobra.Command, args []string) {
 		if username == "" || len(organizations) == 0 {
 			cmd.Usage()
@@ -139,7 +139,7 @@ var deleteApps = &cobra.Command{
 							}
 						}
 
-						fmt.Printf("deleting application guid: %s name: %s", app.Guid, app.Name)
+						fmt.Printf("deleting application guid: %s name: %s\n", app.Guid, app.Name)
 						if err := client.DeleteApp(app.Guid); err != nil {
 							fmt.Printf("error deleting app guid: %s error: %s", app.Guid, err.Error())
 						}
