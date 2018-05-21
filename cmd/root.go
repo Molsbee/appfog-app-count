@@ -82,6 +82,7 @@ var listApps = &cobra.Command{
 			client, err := service.NewClient(endpoint, username, string(pass))
 			if err != nil {
 				fmt.Println(fmt.Sprintf("unable to login with cloud foundry api at endpoint %s - error %s", endpoint, err.Error()))
+				os.Exit(1)
 			}
 
 			org, err := client.GetOrgByName(organization)
@@ -116,6 +117,7 @@ var deleteApps = &cobra.Command{
 			client, err := service.NewClient(endpoint, username, string(pass))
 			if err != nil {
 				fmt.Println(fmt.Sprintf("unable to login with cloud foundry api at endpoint %s - error %s", endpoint, err.Error()))
+				os.Exit(1)
 			}
 
 			for _, orgName := range orgs {
