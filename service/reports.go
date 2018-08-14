@@ -1,23 +1,23 @@
 package service
 
 import (
-	"github.com/molsbee/appfog-app-count/model"
-	"fmt"
-	"github.com/pkg/errors"
-	"time"
-	"os"
 	"encoding/csv"
-	"strconv"
+	"fmt"
+	"github.com/molsbee/appfog-app-count/model"
 	"github.com/molsbee/go-cfclient"
+	"github.com/pkg/errors"
 	"net/url"
+	"os"
+	"strconv"
+	"time"
 )
 
 func GenerateReport(username, password, region, endpoint string) error {
 	fmt.Printf("collecting application data for region %s\n", region)
 	client, err := cfclient.NewClient(&cfclient.Config{
 		ApiAddress: endpoint,
-		Username: username,
-		Password: password,
+		Username:   username,
+		Password:   password,
 	})
 
 	if err != nil {
@@ -66,14 +66,13 @@ func GenerateReport(username, password, region, endpoint string) error {
 	return nil
 }
 
-func setupWorkers(client *cfclient.Client, orgs []cfclient.Org) (chan model.WorkerResponse) {
+func setupWorkers(client *cfclient.Client, orgs []cfclient.Org) chan model.WorkerResponse {
 	orgJobs := make(chan cfclient.Org, len(orgs))
 	for _, org := range orgs {
 		orgJobs <- org
 	}
 
 	results := make(chan model.WorkerResponse, len(orgs))
-
 
 	for id := 1; id <= 5; id++ {
 		go func() {
