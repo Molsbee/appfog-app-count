@@ -126,27 +126,25 @@ var deleteApps = &cobra.Command{
 				if len(org.Name) != 0 {
 					apps, _ := client.ListAppsByOrgGuid(org.Guid)
 					for _, app := range apps {
-						if app.State == "STARTED" {
-							services, _ := client.ListAppServiceBindings(app.Guid)
-							for _, service := range services {
-								fmt.Printf("deleting service guid: %s\n", service.Guid)
-								if err := client.DeleteServiceBinding(service.Guid); err != nil {
-									fmt.Printf("error deleting service binding guid: %s error: %s\n", service.Guid, err.Error())
-								}
+						services, _ := client.ListAppServiceBindings(app.Guid)
+						for _, service := range services {
+							fmt.Printf("deleting service guid: %s\n", service.Guid)
+							if err := client.DeleteServiceBinding(service.Guid); err != nil {
+								fmt.Printf("error deleting service binding guid: %s error: %s\n", service.Guid, err.Error())
 							}
+						}
 
-							routes, _ := client.GetAppRoutes(app.Guid)
-							for _, route := range routes {
-								fmt.Printf("deleting route - host name: %s\n", route.Host)
-								if err := client.DeleteRoute(route.Guid); err != nil {
-									fmt.Printf("error deleting route guid: %s error: %s\n", route.Guid, err.Error())
-								}
+						routes, _ := client.GetAppRoutes(app.Guid)
+						for _, route := range routes {
+							fmt.Printf("deleting route - host name: %s\n", route.Host)
+							if err := client.DeleteRoute(route.Guid); err != nil {
+								fmt.Printf("error deleting route guid: %s error: %s\n", route.Guid, err.Error())
 							}
+						}
 
-							fmt.Printf("deleting application guid: %s name: %s\n", app.Guid, app.Name)
-							if err := client.DeleteApp(app.Guid); err != nil {
-								fmt.Printf("error deleting app guid: %s error: %s", app.Guid, err.Error())
-							}
+						fmt.Printf("deleting application guid: %s name: %s\n", app.Guid, app.Name)
+						if err := client.DeleteApp(app.Guid); err != nil {
+							fmt.Printf("error deleting app guid: %s error: %s", app.Guid, err.Error())
 						}
 					}
 
